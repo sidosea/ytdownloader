@@ -4,7 +4,7 @@
 a = Analysis(
     ['ytdownloader.py'],
     pathex=[],
-    binaries=[],
+    binaries=[('venv/Lib/site-packages/yt_dlp', 'yt_dlp')],
     datas=[],
     hiddenimports=[],
     hookspath=[],
