@@ -1,6 +1,7 @@
 import os
 import threading
 import tkinter.messagebox as messagebox
+import tkinter.filedialog as filedialog
 import customtkinter as ctk
 import yt_dlp
 
@@ -37,6 +38,30 @@ class YTDownloaderApp(ctk.CTk):
             width=380
         )
         self.url_entry.pack(side="left", fill="x", expand=True)
+
+        # Default download folder
+        self.download_folder = os.path.join(os.path.expanduser('~'), 'Downloads')
+
+        # Folder Selection
+        self.folder_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.folder_frame.pack(fill="x", padx=40, pady=(10, 0))
+
+        self.folder_label = ctk.CTkLabel(
+            self.folder_frame,
+            text=f"저장 폴더: {self.download_folder}",
+            anchor="w",
+            font=ctk.CTkFont(size=12)
+        )
+        self.folder_label.pack(side="left", fill="x", expand=True)
+
+        self.choose_folder_btn = ctk.CTkButton(
+            self.folder_frame,
+            text="폴더 선택",
+            font=ctk.CTkFont(size=12),
+            width=110,
+            command=self.choose_download_folder
+        )
+        self.choose_folder_btn.pack(side="left", padx=(10, 0))
 
         # Format Selection
         self.format_var = ctk.StringVar(value="video")
@@ -79,6 +104,19 @@ class YTDownloaderApp(ctk.CTk):
         )
         self.status_label.pack(pady=10)
 
+        # Open Folder Button (disabled until download succeeds)
+        self.open_folder_btn = ctk.CTkButton(
+            self,
+            text="다운로드 폴더 열기",
+            font=ctk.CTkFont(size=14),
+            height=35,
+            state="disabled",
+            command=self.open_download_folder
+        )
+        self.open_folder_btn.pack(pady=(0, 10))
+
+        self.last_download_path = None
+
     def start_download_thread(self):
         url = self.url_entry.get().strip()
         if not url:
@@ -91,6 +129,7 @@ class YTDownloaderApp(ctk.CTk):
         self.url_entry.configure(state="disabled")
         self.video_radio.configure(state="disabled")
         self.audio_radio.configure(state="disabled")
+        self.choose_folder_btn.configure(state="disabled")
 
         format_choice = self.format_var.get()
 
@@ -100,8 +139,8 @@ class YTDownloaderApp(ctk.CTk):
         thread.start()
 
     def download_video(self, url, format_choice):
-        # 기본 다운로드 경로를 사용자의 Downloads 폴더로 설정
-        download_path = os.path.join(os.path.expanduser('~'), 'Downloads')
+        # 사용자가 선택한 다운로드 경로를 사용
+        download_path = self.download_folder
         
         ydl_opts = {
             'outtmpl': os.path.join(download_path, '%(title)s.%(ext)s'),
@@ -121,8 +160,9 @@ class YTDownloaderApp(ctk.CTk):
             })
         else:
             ydl_opts.update({
-                # 비디오와 오디오를 합친 mp4 제공 (ffmpeg 필요할 수 있음)
-                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                # Shorts나 일부 영상에서 mp4 포맷이 없을 때도 자동으로 가장 좋은 영상/오디오를 선택
+                'format': 'bestvideo+bestaudio/best',
+                'merge_output_format': 'mp4',
             })
 
         try:
@@ -142,18 +182,38 @@ class YTDownloaderApp(ctk.CTk):
         self.url_entry.configure(state="normal")
         self.video_radio.configure(state="normal")
         self.audio_radio.configure(state="normal")
+        self.choose_folder_btn.configure(state="normal")
+        self.open_folder_btn.configure(state="disabled")
         self.url_entry.delete(0, 'end')
 
+    def choose_download_folder(self):
+        selected_folder = filedialog.askdirectory(initialdir=self.download_folder)
+        if selected_folder:
+            self.download_folder = selected_folder
+            self.folder_label.configure(text=f"저장 폴더: {self.download_folder}")
+
+    def open_download_folder(self):
+        if self.last_download_path and os.path.isdir(self.last_download_path):
+            try:
+                os.startfile(self.last_download_path)
+            except Exception as e:
+                messagebox.showerror("오류", f"폴더를 열 수 없습니다:\n{e}")
+        else:
+            messagebox.showwarning("경고", "다운로드 폴더를 찾을 수 없습니다.")
+
     def on_download_success(self, download_path):
+        self.last_download_path = download_path
         self.reset_ui()
+        self.open_folder_btn.configure(state="normal")
         self.status_label.configure(text=f"다운로드 완료! 경로: {download_path}", text_color="#27ae60")
         messagebox.showinfo("완료", f"성공적으로 다운로드되었습니다.\n저장 위치: {download_path}")
 
     def on_download_error(self, error_msg):
         self.reset_ui()
+        self.last_download_path = None
         self.status_label.configure(text="다운로드 실패", text_color="#e74c3c")
         
-        # ffmpeg 관련 에러인 경우 사용자 친화적 메시지 추가
+        # ffmpeg 에러
         if "ffmpeg" in error_msg.lower() or "ffprobe" in error_msg.lower():
             extra_msg = "\n\n💡 참고: 고화질 영상 또는 MP3 변환을 위해서는 컴퓨터에 'ffmpeg'가 설치되어 있어야 합니다."
         else:
