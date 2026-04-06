@@ -1,9 +1,14 @@
 import os
+import shutil
 import threading
+import webbrowser
 import tkinter.messagebox as messagebox
 import tkinter.filedialog as filedialog
 import customtkinter as ctk
 import yt_dlp
+
+# 고화질 병합(MP4)·MP3 변환에 필요. Windows 사용자는 PATH에 ffmpeg.exe가 있어야 합니다.
+FFMPEG_DOWNLOAD_URL = "https://ffmpeg.org/download.html"
 
 # Set modern appearance
 ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
@@ -117,10 +122,29 @@ class YTDownloaderApp(ctk.CTk):
 
         self.last_download_path = None
 
+    @staticmethod
+    def _ffmpeg_on_path():
+        return shutil.which("ffmpeg") is not None
+
+    def _offer_ffmpeg_download_page(self):
+        if messagebox.askyesno(
+            "FFmpeg 필요",
+            "이 프로그램은 고화질 영상 병합(MP4)과 음원 MP3 변환에 FFmpeg가 필요합니다.\n"
+            "현재 시스템 PATH에서 ffmpeg를 찾을 수 없습니다.\n\n"
+            "FFmpeg 공식 다운로드 페이지를 브라우저에서 여시겠습니까?\n"
+            "(설치 후 터미널에서 'ffmpeg -version'이 되도록 PATH를 설정해 주세요.)",
+            icon="warning",
+        ):
+            webbrowser.open(FFMPEG_DOWNLOAD_URL)
+
     def start_download_thread(self):
         url = self.url_entry.get().strip()
         if not url:
             messagebox.showwarning("입력 오류", "유튜브 URL을 입력해주세요.")
+            return
+
+        if not self._ffmpeg_on_path():
+            self._offer_ffmpeg_download_page()
             return
 
         # UI 업데이트: 다운로드 중 상태로 변경
@@ -212,14 +236,27 @@ class YTDownloaderApp(ctk.CTk):
         self.reset_ui()
         self.last_download_path = None
         self.status_label.configure(text="다운로드 실패", text_color="#e74c3c")
-        
-        # ffmpeg 에러
-        if "ffmpeg" in error_msg.lower() or "ffprobe" in error_msg.lower():
-            extra_msg = "\n\n💡 참고: 고화질 영상 또는 MP3 변환을 위해서는 컴퓨터에 'ffmpeg'가 설치되어 있어야 합니다."
-        else:
-            extra_msg = ""
-            
-        messagebox.showerror("오류", f"다운로드 중 문제가 발생했습니다:\n{error_msg}{extra_msg}")
+
+        lowered = error_msg.lower()
+        ffmpeg_related = "ffmpeg" in lowered or "ffprobe" in lowered
+
+        messagebox.showerror(
+            "오류",
+            f"다운로드 중 문제가 발생했습니다:\n{error_msg}"
+            + (
+                "\n\n💡 고화질 영상 병합 또는 MP3 변환에는 FFmpeg가 필요합니다."
+                if ffmpeg_related
+                else ""
+            ),
+        )
+
+        if ffmpeg_related:
+            if messagebox.askyesno(
+                "FFmpeg 안내",
+                "FFmpeg 설치·PATH 설정 안내를 위해 공식 다운로드 페이지를 브라우저에서 여시겠습니까?",
+                icon="warning",
+            ):
+                webbrowser.open(FFMPEG_DOWNLOAD_URL)
 
 if __name__ == "__main__":
     app = YTDownloaderApp()

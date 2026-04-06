@@ -1,12 +1,22 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_all
 
+# yt_dlp·customtkinter는 동적 로딩이 많아 전체 수집
+_datas = []
+_binaries = []
+_hiddenimports = []
+for _pkg in ("yt_dlp", "customtkinter"):
+    d, b, h = collect_all(_pkg)
+    _datas += d
+    _binaries += b
+    _hiddenimports += h
 
 a = Analysis(
-    ['ytdownloader.py'],
+    ["ytdownloader.py"],
     pathex=[],
-    binaries=[('venv/Lib/site-packages/yt_dlp', 'yt_dlp')],
-    datas=[],
-    hiddenimports=[],
+    binaries=_binaries,
+    datas=_datas,
+    hiddenimports=_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -22,7 +32,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='ytdownloader',
+    name="ytdownloader",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
